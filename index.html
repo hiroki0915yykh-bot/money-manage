@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>支出管理ダッシュボード</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0d0f12">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <h1>DashBoard</h1>
+            <p>現在の支出状況</p>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- サマリーカード -->
+            <section class="summary-section">
+                <!-- 今月の支出合計 -->
+                <div class="card glass">
+                    <h2>今月の総支出</h2>
+                    <div class="amount-display">
+                        <span class="currency">¥</span>
+                        <span id="total-amount" class="amount">0</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div id="progress-bar" class="progress-bar"></div>
+                    </div>
+                </div>
+
+                <!-- 内訳 -->
+                <div class="card glass breakdown">
+                    <div class="breakdown-item">
+                        <span class="label">固定費</span>
+                        <span id="fixed-total" class="value">¥0</span>
+                    </div>
+                    <div class="breakdown-item">
+                        <span class="label">変動費</span>
+                        <span id="variable-total" class="value">¥0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ざっくり入力エリア -->
+            <section class="input-section">
+                <div class="card glass mt-4">
+                    <h2>📝 ざっくりメモ入力</h2>
+                    <p class="hint">「コンビニ 500」のように入力して送信</p>
+                    <textarea id="expense-input" placeholder="スタバ 600&#10;スーパー 1500" rows="3"></textarea>
+                    <button id="submit-btn" class="primary-btn">登録する</button>
+                    <div id="feedback-msg" class="feedback hidden">登録しました</div>
+                </div>
+            </section>
+
+            <!-- 最近の支出リスト -->
+            <section class="recent-section">
+                <div class="card glass mt-4">
+                    <div class="section-header">
+                        <h2>📅 最近の変動費</h2>
+                    </div>
+                    <ul id="expense-list" class="expense-list">
+                        <!-- Javascriptで追加 -->
+                    </ul>
+                </div>
+            </section>
+            
+            <!-- 固定費リスト -->
+            <section class="fixed-section">
+                <div class="card glass mt-4">
+                    <div class="section-header">
+                        <h2>🏦 今月の固定費</h2>
+                        <button id="open-settings-btn" class="settings-trigger">⚙️ 設定</button>
+                    </div>
+                    <ul id="fixed-list" class="expense-list">
+                        <!-- Javascriptで追加 -->
+                    </ul>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- 固定費・サブスク設定モーダル -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 style="color: var(--text-primary);">⚙️ 固定費の編集</h2>
+                <button id="close-modal-btn" class="icon-btn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="add-fixed-form">
+                    <input type="text" id="fixed-name-input" placeholder="項目名 (例: 家賃)">
+                    <input type="number" id="fixed-amount-input" placeholder="金額 (例: 80000)">
+                    <button id="add-fixed-btn" class="primary-btn small-btn">リストに追加</button>
+                </div>
+                <h3 style="font-size:14px; color:var(--text-secondary); margin-top:24px; margin-bottom:8px;">現在の登録済リスト</h3>
+                <ul id="edit-fixed-list" class="expense-list">
+                    <!-- Javascriptで追加 -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
