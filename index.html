@@ -14,13 +14,16 @@
     <link rel="apple-touch-icon" href="icon.svg">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-container" id="app-container" style="display: none;">
         <!-- ヘッダー -->
         <header class="header">
             <h1>DashBoard</h1>
-            <p>現在の支出状況</p>
+            <p>現在の支出状況 <span id="sync-status" style="color:var(--success-color); font-size:10px;">☁️同期待ち</span></p>
         </header>
 
         <!-- メインコンテンツ -->
@@ -58,8 +61,8 @@
                     <h2>📝 ざっくりメモ入力</h2>
                     <p class="hint">「コンビニ 500」のように入力して送信</p>
                     <textarea id="expense-input" placeholder="スタバ 600&#10;スーパー 1500" rows="3"></textarea>
-                    <button id="submit-btn" class="primary-btn">登録する</button>
-                    <div id="feedback-msg" class="feedback hidden">登録しました</div>
+                    <button id="submit-btn" class="primary-btn">クラウドに保存</button>
+                    <div id="feedback-msg" class="feedback hidden">保存しました</div>
                 </div>
             </section>
 
@@ -90,6 +93,15 @@
             </section>
 
         </main>
+    </div>
+
+    <!-- データベース未設定時のエラー表示エリア -->
+    <div id="setup-container" style="display: none; padding: 40px 20px; text-align: center;">
+        <h2>データベースの設定が必要です</h2>
+        <p style="color:var(--text-secondary); margin-top:20px;">
+            マジックリンクからアプリを開き直してください。<br>
+            セキュリティのため、直接このURLを開いてもデータは同期されません。
+        </p>
     </div>
 
     <!-- 固定費・サブスク設定モーダル -->

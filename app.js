@@ -2,24 +2,40 @@
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('Service Worker registered successfully.', reg))
             .catch(err => console.log('Service Worker registration failed:', err));
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
 
-    // --- 初期データの設定（固定費のモック） ---
-    const defaultFixed = [
-        { id: 1, name: '家賃', amount: 80000 },
-        { id: 2, name: 'Netflix', amount: 1490 }
-    ];
-    
-    if (!localStorage.getItem('budget_fixed')) {
-        localStorage.setItem('budget_fixed', JSON.stringify(defaultFixed));
+    const appContainer = document.getElementById('app-container');
+    const setupContainer = document.getElementById('setup-container');
+
+    // === 魔法のリンク（マジックリンク）の受け取り処理 ===
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramUrl = urlParams.get('db_url');
+    const paramKey = urlParams.get('db_key');
+
+    if (paramUrl && paramKey) {
+        // キーをブラウザに隠して保存
+        localStorage.setItem('supabase_url', paramUrl);
+        localStorage.setItem('supabase_key', paramKey);
+        // セキュリティのため、URL欄からキーの文字を消し去る
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
-    if (!localStorage.getItem('budget_variable')) {
-        localStorage.setItem('budget_variable', JSON.stringify([]));
+
+    const supabaseUrl = localStorage.getItem('supabase_url');
+    const supabaseKey = localStorage.getItem('supabase_key');
+    let supabase = null;
+
+    if (supabaseUrl && supabaseKey) {
+        // データベース接続準備
+        supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        appContainer.style.display = 'block';
+    } else {
+        // キーがない場合はエラー画面
+        setupContainer.style.display = 'block';
+        return; // 以後の処理を止める
     }
 
     // --- DOM 要素の取得 ---
@@ -27,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fixedTotalEl = document.getElementById('fixed-total');
     const variableTotalEl = document.getElementById('variable-total');
     const progressBarEl = document.getElementById('progress-bar');
+    const syncStatusEl = document.getElementById('sync-status');
     
     const expenseInput = document.getElementById('expense-input');
     const submitBtn = document.getElementById('submit-btn');
@@ -53,19 +70,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveVarBtn = document.getElementById('save-var-btn');
     const deleteVarBtn = document.getElementById('delete-var-btn');
 
+    // --- 状態管理 ---
+    let currentFixedExpenses = [];
+    let currentVariableExpenses = [];
+
     // --- 数値のフォーマット ---
     const formatMoney = (num) => {
         return num.toLocaleString('ja-JP');
     };
 
-    // --- データの描画 ---
-    const renderDashboard = () => {
-        const fixedExpenses = JSON.parse(localStorage.getItem('budget_fixed')) || [];
-        const variableExpenses = JSON.parse(localStorage.getItem('budget_variable')) || [];
+    const updateSyncStatus = (message, isError = false) => {
+        syncStatusEl.innerText = message;
+        syncStatusEl.style.color = isError ? 'var(--danger-color)' : 'var(--success-color)';
+    };
+
+    // --- Supabaseからデータを取得してダッシュボードを描画 ---
+    const renderDashboard = async () => {
+        updateSyncStatus('☁️同期中...');
+        
+        // データの取得
+        const { data: fixedData, error: fixedErr } = await supabase.from('fixed_expenses').select('*');
+        const { data: varData, error: varErr } = await supabase.from('variable_expenses').select('*').order('created_at', { ascending: false });
+
+        if (fixedErr || varErr) {
+            updateSyncStatus('❌通信エラー', true);
+            console.error(fixedErr, varErr);
+            return;
+        }
+
+        currentFixedExpenses = fixedData || [];
+        currentVariableExpenses = varData || [];
 
         // 合計計算
-        const fixedTotal = fixedExpenses.reduce((sum, item) => sum + item.amount, 0);
-        const variableTotal = variableExpenses.reduce((sum, item) => sum + item.amount, 0);
+        const fixedTotal = currentFixedExpenses.reduce((sum, item) => sum + item.amount, 0);
+        const variableTotal = currentVariableExpenses.reduce((sum, item) => sum + item.amount, 0);
         const grandTotal = fixedTotal + variableTotal;
 
         // ダッシュボード更新
@@ -73,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fixedTotalEl.innerText = '¥' + formatMoney(fixedTotal);
         variableTotalEl.innerText = '¥' + formatMoney(variableTotal);
 
-        // プログレスバー（予算20万仮定）
+        // プログレスバー
         const budget = 200000;
         const progressPercentage = Math.min((grandTotal / budget) * 100, 100);
         progressBarEl.style.width = progressPercentage + '%';
@@ -85,10 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // ホームの固定費リスト描画
         fixedList.innerHTML = '';
-        if(fixedExpenses.length === 0){
+        if(currentFixedExpenses.length === 0){
              fixedList.innerHTML = '<li style="color:var(--text-secondary);font-size:14px;">設定から登録してください</li>';
         } else {
-             fixedExpenses.forEach(item => {
+             currentFixedExpenses.forEach(item => {
                  const li = document.createElement('li');
                  li.innerHTML = `
                      <div class="item-info">
@@ -102,11 +140,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 変動費リストの描画
         expenseList.innerHTML = '';
-        const sortedVariables = [...variableExpenses].reverse();
-        if (sortedVariables.length === 0) {
+        if (currentVariableExpenses.length === 0) {
             expenseList.innerHTML = '<li style="color:var(--text-secondary);font-size:14px;">まだ記録がありません</li>';
         } else {
-            sortedVariables.slice(0, 5).forEach(item => { // 最新5件表示
+            currentVariableExpenses.slice(0, 5).forEach(item => { // 最新5件表示
                 const li = document.createElement('li');
                 li.className = 'clickable-item';
                 li.setAttribute('data-id', item.id);
@@ -121,18 +158,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 expenseList.appendChild(li);
             });
         }
+
+        updateSyncStatus('☁️同期完了');
     };
 
     // --- 固定費設定モーダルのリスト描画 ---
     const renderSettingsList = () => {
-        const fixedExpenses = JSON.parse(localStorage.getItem('budget_fixed')) || [];
         editFixedList.innerHTML = '';
-        
-        if(fixedExpenses.length === 0){
+        if(currentFixedExpenses.length === 0){
              editFixedList.innerHTML = '<li style="color:var(--text-secondary);font-size:14px;">登録された固定費はありません</li>';
         }
 
-        fixedExpenses.forEach(item => {
+        currentFixedExpenses.forEach(item => {
             const li = document.createElement('li');
             li.innerHTML = `
                 <div class="item-info" style="flex:1;">
@@ -144,45 +181,35 @@ document.addEventListener('DOMContentLoaded', () => {
             editFixedList.appendChild(li);
         });
 
-        // 削除ボタンのイベントリスナー登録
+        // 削除ボタンのイベント
         document.querySelectorAll('#edit-fixed-list .delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const id = parseInt(e.target.getAttribute('data-id'), 10);
-                deleteFixedExpense(id);
+            btn.addEventListener('click', async (e) => {
+                const id = e.target.getAttribute('data-id');
+                updateSyncStatus('☁️削除中...');
+                await supabase.from('fixed_expenses').delete().eq('id', id);
+                renderDashboard().then(() => renderSettingsList());
             });
         });
     };
 
     // --- 固定費の追加処理 ---
-    const addFixedExpense = () => {
+    const addFixedExpense = async () => {
         const name = fixedNameInput.value.trim();
         const amountStr = fixedAmountInput.value.trim();
         const amount = parseInt(amountStr, 10);
 
         if (name && !isNaN(amount)) {
-            const fixedExpenses = JSON.parse(localStorage.getItem('budget_fixed')) || [];
-            fixedExpenses.push({
-                id: Date.now(),
-                name: name,
-                amount: amount
-            });
-            localStorage.setItem('budget_fixed', JSON.stringify(fixedExpenses));
+            updateSyncStatus('☁️保存中...');
+            await supabase.from('fixed_expenses').insert([{ 
+                id: Date.now().toString(), 
+                name, 
+                amount 
+            }]);
             
-            // 入力リセットと再描画
             fixedNameInput.value = '';
             fixedAmountInput.value = '';
-            renderSettingsList();
-            renderDashboard();
+            renderDashboard().then(() => renderSettingsList());
         }
-    };
-
-    // --- 固定費の削除処理 ---
-    const deleteFixedExpense = (id) => {
-        let fixedExpenses = JSON.parse(localStorage.getItem('budget_fixed')) || [];
-        fixedExpenses = fixedExpenses.filter(item => item.id !== id);
-        localStorage.setItem('budget_fixed', JSON.stringify(fixedExpenses));
-        renderSettingsList();
-        renderDashboard();
     };
 
     // --- メモ解析（自然言語の一括解析）機能 ---
@@ -204,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const amount = parseInt(amountStr, 10);
                 if (!isNaN(amount)) {
                     newEntries.push({
-                        id: Date.now() + Math.random(),
+                        id: (Date.now() + Math.random()).toString(),
                         name: name,
                         amount: amount,
                         date: today
@@ -215,14 +242,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return newEntries;
     };
 
-
     // --- 変動費の編集機能（モーダル開く） ---
     const openEditVarModal = (id) => {
-        const variables = JSON.parse(localStorage.getItem('budget_variable')) || [];
-        const target = variables.find(item => item.id === id);
+        const target = currentVariableExpenses.find(item => item.id === id);
         if(!target) return;
 
-        editVarIdInput.value = id; // string か number になるが value は string でセットされる
+        editVarIdInput.value = target.id;
         editVarNameInput.value = target.name;
         editVarAmountInput.value = target.amount;
 
@@ -230,36 +255,32 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // 変動費の保存（編集完了）
-    saveVarBtn.addEventListener('click', () => {
-        const id = parseFloat(editVarIdInput.value); // Date.now()+rand のfloatの場合もあるため parseFloat にしておく
+    saveVarBtn.addEventListener('click', async () => {
+        const id = editVarIdInput.value;
         const name = editVarNameInput.value.trim();
         const amount = parseInt(editVarAmountInput.value.trim(), 10);
 
         if(name && !isNaN(amount)) {
-            let variables = JSON.parse(localStorage.getItem('budget_variable')) || [];
-            // IDで検索し更新
-            variables = variables.map(item => {
-                if(item.id === id) {
-                    return { ...item, name, amount };
-                }
-                return item;
-            });
-            localStorage.setItem('budget_variable', JSON.stringify(variables));
+            submitBtn.disabled = true;
+            updateSyncStatus('☁️更新中...');
+            await supabase.from('variable_expenses').update({ name, amount }).eq('id', id);
             
             editVarModal.classList.add('hidden');
-            renderDashboard();
+            await renderDashboard();
+            submitBtn.disabled = false;
         }
     });
 
     // 変動費の削除
-    deleteVarBtn.addEventListener('click', () => {
-        const id = parseFloat(editVarIdInput.value);
-        let variables = JSON.parse(localStorage.getItem('budget_variable')) || [];
-        variables = variables.filter(item => item.id !== id);
-        localStorage.setItem('budget_variable', JSON.stringify(variables));
+    deleteVarBtn.addEventListener('click', async () => {
+        const id = editVarIdInput.value;
+        submitBtn.disabled = true;
+        updateSyncStatus('☁️削除中...');
+        await supabase.from('variable_expenses').delete().eq('id', id);
 
         editVarModal.classList.add('hidden');
-        renderDashboard();
+        await renderDashboard();
+        submitBtn.disabled = false;
     });
 
     // モーダル外クリックで各種モーダルを閉じる
@@ -272,24 +293,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-
-    // --- イベントリスナー登録 ---
-
     // 変動費の新規登録機能(ざっくり入力)
-    submitBtn.addEventListener('click', () => {
+    submitBtn.addEventListener('click', async () => {
         const inputText = expenseInput.value;
         const parsedItems = parseInput(inputText);
 
         if (parsedItems.length > 0) {
-            const currentVariables = JSON.parse(localStorage.getItem('budget_variable')) || [];
-            localStorage.setItem('budget_variable', JSON.stringify([...currentVariables, ...parsedItems]));
-            
-            renderDashboard();
+            submitBtn.disabled = true;
+            updateSyncStatus('☁️保存中...');
+            // DBへInsert
+            const { error } = await supabase.from('variable_expenses').insert(parsedItems);
 
-            expenseInput.value = '';
-            feedbackMsg.innerText = `${parsedItems.length}件の支出を登録しました！`;
-            feedbackMsg.classList.remove('hidden');
-            setTimeout(() => { feedbackMsg.classList.add('hidden'); }, 3000);
+            if (!error) {
+                await renderDashboard();
+                expenseInput.value = '';
+                feedbackMsg.innerText = `${parsedItems.length}件の支出を登録しました！`;
+                feedbackMsg.classList.remove('hidden');
+                setTimeout(() => { feedbackMsg.classList.add('hidden'); }, 3000);
+            } else {
+                alert('クラウドへの保存に失敗しました。');
+                console.error(error);
+            }
+            submitBtn.disabled = false;
         } else {
             feedbackMsg.innerText = 'エラー：書式が不正です (例: スタバ 500)';
             feedbackMsg.style.color = 'var(--danger-color)';
@@ -320,11 +345,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 固定費追加ボタン
     addFixedBtn.addEventListener('click', addFixedExpense);
 
-    // 初回描画
+    // 初回実行
     renderDashboard();
-
-    // 補助: CSSのpointer-events-noneを設定
-    // CSSに .pointer-events-none { pointer-events: none; } が無いので直接JSで書いてもあるが、
-    // HTMLの生成元のapp.jsで、クリックイベントをliにつけているので、子要素であるテキストなどが
-    // e.targetになった時の問題を避けるため追加してある。
 });
