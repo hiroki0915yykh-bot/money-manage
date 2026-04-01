@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const expenseList = document.getElementById('expense-list');
     const fixedList = document.getElementById('fixed-list');
 
-    // モーダル用DOM
+    // モーダル用DOM（固定費）
     const settingsModal = document.getElementById('settings-modal');
     const openSettingsBtn = document.getElementById('open-settings-btn');
     const closeModalBtn = document.getElementById('close-modal-btn');
@@ -43,6 +43,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const fixedNameInput = document.getElementById('fixed-name-input');
     const fixedAmountInput = document.getElementById('fixed-amount-input');
     const addFixedBtn = document.getElementById('add-fixed-btn');
+
+    // モーダル用DOM（変動費の編集・削除用）
+    const editVarModal = document.getElementById('edit-variable-modal');
+    const closeVarModalBtn = document.getElementById('close-var-modal-btn');
+    const editVarNameInput = document.getElementById('edit-var-name-input');
+    const editVarAmountInput = document.getElementById('edit-var-amount-input');
+    const editVarIdInput = document.getElementById('edit-var-id-input');
+    const saveVarBtn = document.getElementById('save-var-btn');
+    const deleteVarBtn = document.getElementById('delete-var-btn');
 
     // --- 数値のフォーマット ---
     const formatMoney = (num) => {
@@ -97,15 +106,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (sortedVariables.length === 0) {
             expenseList.innerHTML = '<li style="color:var(--text-secondary);font-size:14px;">まだ記録がありません</li>';
         } else {
-            sortedVariables.slice(0, 5).forEach(item => { 
+            sortedVariables.slice(0, 5).forEach(item => { // 最新5件表示
                 const li = document.createElement('li');
+                li.className = 'clickable-item';
+                li.setAttribute('data-id', item.id);
                 li.innerHTML = `
-                    <div class="item-info">
-                        <span class="item-name">${item.name}</span>
-                        <span class="item-date">${item.date}</span>
+                    <div class="item-info pointer-events-none">
+                        <span class="item-name pointer-events-none">${item.name}</span>
+                        <span class="item-date pointer-events-none">${item.date}</span>
                     </div>
-                    <span class="item-price">¥${formatMoney(item.amount)}</span>
+                    <span class="item-price pointer-events-none">¥${formatMoney(item.amount)}</span>
                 `;
+                li.addEventListener('click', () => openEditVarModal(item.id));
                 expenseList.appendChild(li);
             });
         }
@@ -133,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // 削除ボタンのイベントリスナー登録
-        document.querySelectorAll('.delete-btn').forEach(btn => {
+        document.querySelectorAll('#edit-fixed-list .delete-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const id = parseInt(e.target.getAttribute('data-id'), 10);
                 deleteFixedExpense(id);
@@ -203,8 +215,67 @@ document.addEventListener('DOMContentLoaded', () => {
         return newEntries;
     };
 
-    // --- イベントリスナー ---
-    // 変動費の登録
+
+    // --- 変動費の編集機能（モーダル開く） ---
+    const openEditVarModal = (id) => {
+        const variables = JSON.parse(localStorage.getItem('budget_variable')) || [];
+        const target = variables.find(item => item.id === id);
+        if(!target) return;
+
+        editVarIdInput.value = id; // string か number になるが value は string でセットされる
+        editVarNameInput.value = target.name;
+        editVarAmountInput.value = target.amount;
+
+        editVarModal.classList.remove('hidden');
+    };
+
+    // 変動費の保存（編集完了）
+    saveVarBtn.addEventListener('click', () => {
+        const id = parseFloat(editVarIdInput.value); // Date.now()+rand のfloatの場合もあるため parseFloat にしておく
+        const name = editVarNameInput.value.trim();
+        const amount = parseInt(editVarAmountInput.value.trim(), 10);
+
+        if(name && !isNaN(amount)) {
+            let variables = JSON.parse(localStorage.getItem('budget_variable')) || [];
+            // IDで検索し更新
+            variables = variables.map(item => {
+                if(item.id === id) {
+                    return { ...item, name, amount };
+                }
+                return item;
+            });
+            localStorage.setItem('budget_variable', JSON.stringify(variables));
+            
+            editVarModal.classList.add('hidden');
+            renderDashboard();
+        }
+    });
+
+    // 変動費の削除
+    deleteVarBtn.addEventListener('click', () => {
+        const id = parseFloat(editVarIdInput.value);
+        let variables = JSON.parse(localStorage.getItem('budget_variable')) || [];
+        variables = variables.filter(item => item.id !== id);
+        localStorage.setItem('budget_variable', JSON.stringify(variables));
+
+        editVarModal.classList.add('hidden');
+        renderDashboard();
+    });
+
+    // モーダル外クリックで各種モーダルを閉じる
+    window.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.classList.add('hidden');
+        }
+        if (e.target === editVarModal) {
+            editVarModal.classList.add('hidden');
+        }
+    });
+
+
+    // --- イベントリスナー登録 ---
+
+    // 変動費の新規登録機能(ざっくり入力)
     submitBtn.addEventListener('click', () => {
         const inputText = expenseInput.value;
         const parsedItems = parseInput(inputText);
@@ -232,21 +303,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // モーダル開閉
+    // 固定費設定モーダル開閉
     openSettingsBtn.addEventListener('click', () => {
         renderSettingsList();
         settingsModal.classList.remove('hidden');
     });
-
     closeModalBtn.addEventListener('click', () => {
         settingsModal.classList.add('hidden');
     });
 
-    // モーダル外クリックで閉じる
-    settingsModal.addEventListener('click', (e) => {
-        if (e.target === settingsModal) {
-            settingsModal.classList.add('hidden');
-        }
+    // 変動費設定モーダル閉じる
+    closeVarModalBtn.addEventListener('click', () => {
+        editVarModal.classList.add('hidden');
     });
 
     // 固定費追加ボタン
@@ -254,4 +322,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 初回描画
     renderDashboard();
+
+    // 補助: CSSのpointer-events-noneを設定
+    // CSSに .pointer-events-none { pointer-events: none; } が無いので直接JSで書いてもあるが、
+    // HTMLの生成元のapp.jsで、クリックイベントをliにつけているので、子要素であるテキストなどが
+    // e.targetになった時の問題を避けるため追加してある。
 });

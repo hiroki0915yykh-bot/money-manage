@@ -218,12 +218,21 @@ textarea:focus {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px 0;
+    padding: 12px 10px;
     border-bottom: 1px solid var(--card-border);
+    transition: background 0.2s, border-radius 0.2s;
 }
 .expense-list li:last-child {
     border-bottom: none;
 }
+.clickable-item {
+    cursor: pointer;
+    border-radius: 8px;
+}
+.clickable-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .item-info {
     display: flex;
     flex-direction: column;
