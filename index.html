@@ -21,9 +21,13 @@
 <body>
     <div class="app-container" id="app-container" style="display: none;">
         <!-- ヘッダー -->
-        <header class="header">
-            <h1>DashBoard</h1>
-            <p>現在の支出状況 <span id="sync-status" style="color:var(--success-color); font-size:10px;">☁️同期待ち</span></p>
+        <header class="header" style="position: relative;">
+            <div>
+                <h1 id="current-ledger-title">DashBoard</h1>
+                <p>現在の支出状況 <span id="sync-status" style="color:var(--success-color); font-size:10px;">☁️同期待ち</span></p>
+            </div>
+            <!-- ハンバーガーメニューボタン -->
+            <button id="menu-toggle-btn" class="icon-btn" style="position: absolute; right: 15px; top: 15px; font-size: 24px; padding: 0;">☰</button>
         </header>
 
         <!-- メインコンテンツ -->
@@ -80,7 +84,7 @@
             </section>
             
             <!-- 固定費リスト -->
-            <section class="fixed-section">
+            <section class="fixed-section" id="fixed-section-container">
                 <div class="card glass mt-4">
                     <div class="section-header">
                         <h2>🏦 今月の固定費</h2>
@@ -93,6 +97,21 @@
             </section>
 
         </main>
+    </div>
+
+    <!-- サイドドロワーメニュー（帳簿切り替え） -->
+    <div id="drawer-menu" class="drawer hidden">
+        <div class="drawer-content glass">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                <h2 style="font-size:18px; color:var(--text-primary);">🗂 帳簿・用途メニュー</h2>
+                <button id="close-drawer-btn" class="icon-btn" style="font-size: 24px;">×</button>
+            </div>
+            <p style="font-size: 12px; color:var(--text-secondary); margin-bottom:10px;">現在選択中の帳簿</p>
+            <ul id="ledgers-list" class="expense-list" style="margin-bottom: 24px;">
+                <!-- Javascriptで追加 -->
+            </ul>
+            <button id="open-add-ledger-btn" class="primary-btn small-btn" style="background:var(--card-bg); border: 1px solid var(--accent-gradient);">＋ 新しい用途を追加</button>
+        </div>
     </div>
 
     <!-- データベース未設定時のエラー表示エリア -->
@@ -146,6 +165,23 @@
                         <button id="save-var-btn" class="primary-btn small-btn" style="flex: 2; margin-top: 0;">保存する</button>
                         <button id="delete-var-btn" class="delete-btn" style="flex: 1; margin-top: 0; font-size: 14px; padding: 12px;">🗑 削除</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新しい用途（帳簿）追加モーダル -->
+    <div id="add-ledger-modal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h2 style="color: var(--text-primary);">＋ 新しい用途の追加</h2>
+                <button id="close-ledger-modal-btn" class="icon-btn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="add-fixed-form">
+                    <input type="text" id="new-ledger-name" placeholder="用途名 (例: 海外生活用)">
+                    <input type="number" id="new-ledger-budget" placeholder="専用予算 (例: 500000)">
+                    <button id="create-ledger-btn" class="primary-btn mt-4">用途を作成</button>
                 </div>
             </div>
         </div>

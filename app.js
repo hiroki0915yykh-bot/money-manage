@@ -60,11 +60,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // --- DOM 要素の取得 ---
+    const currentLedgerTitleEl = document.getElementById('current-ledger-title');
     const totalAmountEl = document.getElementById('total-amount');
     const fixedTotalEl = document.getElementById('fixed-total');
     const variableTotalEl = document.getElementById('variable-total');
     const progressBarEl = document.getElementById('progress-bar');
     const syncStatusEl = document.getElementById('sync-status');
+    const fixedSectionContainer = document.getElementById('fixed-section-container');
     
     const expenseInput = document.getElementById('expense-input');
     const submitBtn = document.getElementById('submit-btn');
@@ -91,9 +93,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     const saveVarBtn = document.getElementById('save-var-btn');
     const deleteVarBtn = document.getElementById('delete-var-btn');
 
+    // ドロワーと帳簿（Ledger）DOM
+    const drawerMenu = document.getElementById('drawer-menu');
+    const menuToggleBtn = document.getElementById('menu-toggle-btn');
+    const closeDrawerBtn = document.getElementById('close-drawer-btn');
+    const ledgersList = document.getElementById('ledgers-list');
+    const openAddLedgerBtn = document.getElementById('open-add-ledger-btn');
+    const addLedgerModal = document.getElementById('add-ledger-modal');
+    const closeLedgerModalBtn = document.getElementById('close-ledger-modal-btn');
+    const createLedgerBtn = document.getElementById('create-ledger-btn');
+    const newLedgerNameInput = document.getElementById('new-ledger-name');
+    const newLedgerBudgetInput = document.getElementById('new-ledger-budget');
+
     // --- 状態管理 ---
     let currentFixedExpenses = [];
     let currentVariableExpenses = [];
+    let currentLedgers = [];
+    let currentLedgerId = localStorage.getItem('active_ledger') || 'default-ledger';
 
     // --- 数値のフォーマット ---
     const formatMoney = (num) => {
@@ -105,35 +121,85 @@ document.addEventListener('DOMContentLoaded', async () => {
         syncStatusEl.style.color = isError ? 'var(--danger-color)' : 'var(--success-color)';
     };
 
+    // --- 帳簿のFetchとドロワー表示 ---
+    const fetchLedgers = async () => {
+        const { data, error } = await supabase.from('ledgers').select('*').order('created_at', { ascending: true });
+        if (data) {
+            currentLedgers = data;
+        }
+        // もしローカルに保存してるIDがDBに無ければ、デフォルトに戻す
+        if (!currentLedgers.find(l => l.id === currentLedgerId) && currentLedgers.length > 0) {
+            currentLedgerId = currentLedgers.find(l => l.is_default)?.id || currentLedgers[0].id;
+            localStorage.setItem('active_ledger', currentLedgerId);
+        }
+    };
+
+    const renderLedgerMenu = () => {
+        ledgersList.innerHTML = '';
+        currentLedgers.forEach(l => {
+            const li = document.createElement('li');
+            li.className = `ledger-item ${l.id === currentLedgerId ? 'active' : ''}`;
+            li.innerHTML = `<span style="font-weight:${l.id === currentLedgerId ? 'bold' : 'normal'};color:var(--text-primary);">${l.name}</span> <span style="font-size:12px;color:var(--text-secondary);float:right;">¥${formatMoney(l.budget)}</span>`;
+            li.onclick = () => {
+                currentLedgerId = l.id;
+                localStorage.setItem('active_ledger', currentLedgerId);
+                drawerMenu.classList.add('hidden');
+                renderDashboard();
+            };
+            ledgersList.appendChild(li);
+        });
+    };
+
     // --- Supabaseからデータを取得してダッシュボードを描画 ---
     const renderDashboard = async () => {
         updateSyncStatus('☁️同期中...');
         
-        // データの取得
-        const { data: fixedData, error: fixedErr } = await supabase.from('fixed_expenses').select('*');
-        const { data: varData, error: varErr } = await supabase.from('variable_expenses').select('*').order('created_at', { ascending: false });
+        await fetchLedgers();
+        const activeLedger = currentLedgers.find(l => l.id === currentLedgerId);
+        if(!activeLedger) return;
 
-        if (fixedErr || varErr) {
+        currentLedgerTitleEl.innerText = activeLedger.name;
+
+        // 特殊モードかどうかの判定（is_defaultがfalseなら特別モード）
+        const isDefaultLedger = activeLedger.is_default;
+
+        // データの取得 (変動費は現在の帳簿IDのものだけ！)
+        let fixedData = [];
+        if (isDefaultLedger) {
+            // 日常モードのときだけ固定費を取得する
+            const { data } = await supabase.from('fixed_expenses').select('*');
+            fixedData = data || [];
+            fixedSectionContainer.style.display = 'block';
+            document.querySelector('.breakdown').style.display = 'flex';
+        } else {
+            // 特別モードのときは固定費を非表示にする
+            fixedSectionContainer.style.display = 'none';
+            // ブレイクダウンも紛らわしい場合は非表示に
+            document.querySelector('.breakdown').style.display = 'none';
+        }
+
+        const { data: varData, error: varErr } = await supabase.from('variable_expenses').select('*').eq('ledger_id', currentLedgerId).order('created_at', { ascending: false });
+
+        if (varErr) {
             updateSyncStatus('❌通信エラー', true);
-            console.error(fixedErr, varErr);
             return;
         }
 
-        currentFixedExpenses = fixedData || [];
+        currentFixedExpenses = fixedData;
         currentVariableExpenses = varData || [];
 
         // 合計計算
         const fixedTotal = currentFixedExpenses.reduce((sum, item) => sum + item.amount, 0);
         const variableTotal = currentVariableExpenses.reduce((sum, item) => sum + item.amount, 0);
-        const grandTotal = fixedTotal + variableTotal;
+        const grandTotal = isDefaultLedger ? (fixedTotal + variableTotal) : variableTotal;
 
         // ダッシュボード更新
         totalAmountEl.innerText = formatMoney(grandTotal);
         fixedTotalEl.innerText = '¥' + formatMoney(fixedTotal);
         variableTotalEl.innerText = '¥' + formatMoney(variableTotal);
 
-        // プログレスバー
-        const budget = 200000;
+        // プログレスバー (用途専用の予算で割合を出す)
+        const budget = activeLedger.budget || 200000;
         const progressPercentage = Math.min((grandTotal / budget) * 100, 100);
         progressBarEl.style.width = progressPercentage + '%';
         if (progressPercentage > 90) {
@@ -143,20 +209,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         // ホームの固定費リスト描画
-        fixedList.innerHTML = '';
-        if(currentFixedExpenses.length === 0){
-             fixedList.innerHTML = '<li style="color:var(--text-secondary);font-size:14px;">設定から登録してください</li>';
-        } else {
-             currentFixedExpenses.forEach(item => {
-                 const li = document.createElement('li');
-                 li.innerHTML = `
-                     <div class="item-info">
-                         <span class="item-name">${item.name}</span>
-                     </div>
-                     <span class="item-price">¥${formatMoney(item.amount)}</span>
-                 `;
-                 fixedList.appendChild(li);
-             });
+        if (isDefaultLedger) {
+            fixedList.innerHTML = '';
+            if(currentFixedExpenses.length === 0){
+                 fixedList.innerHTML = '<li style="color:var(--text-secondary);font-size:14px;">設定から登録してください</li>';
+            } else {
+                 currentFixedExpenses.forEach(item => {
+                     const li = document.createElement('li');
+                     li.innerHTML = `
+                         <div class="item-info">
+                             <span class="item-name">${item.name}</span>
+                         </div>
+                         <span class="item-price">¥${formatMoney(item.amount)}</span>
+                     `;
+                     fixedList.appendChild(li);
+                 });
+            }
         }
 
         // 変動費リストの描画
@@ -233,6 +301,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // --- 新しい帳簿（用途）を作成 ---
+    createLedgerBtn.addEventListener('click', async () => {
+        const name = newLedgerNameInput.value.trim();
+        const budgetStr = newLedgerBudgetInput.value.trim();
+        const budget = parseInt(budgetStr, 10);
+
+        if (name && !isNaN(budget)) {
+            submitBtn.disabled = true;
+            updateSyncStatus('☁️作成中...');
+            const newId = 'ledger-' + Date.now().toString();
+            await supabase.from('ledgers').insert([{ 
+                id: newId, 
+                name, 
+                budget,
+                is_default: false
+            }]);
+            
+            newLedgerNameInput.value = '';
+            newLedgerBudgetInput.value = '';
+            addLedgerModal.classList.add('hidden');
+            
+            // ついでに今作った帳簿に切り替える
+            currentLedgerId = newId;
+            localStorage.setItem('active_ledger', currentLedgerId);
+            
+            await renderDashboard();
+            submitBtn.disabled = false;
+        } else {
+            alert("用途名と予算を正しく入力してください。");
+        }
+    });
+
     // --- メモ解析（自然言語の一括解析）機能 ---
     const parseInput = (text) => {
         const lines = text.split('\n');
@@ -255,7 +355,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         id: (Date.now() + Math.random()).toString(),
                         name: name,
                         amount: amount,
-                        date: today
+                        date: today,
+                        ledger_id: currentLedgerId // ★現在の帳簿IDを付与して保存
                     });
                 }
             }
@@ -304,14 +405,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         submitBtn.disabled = false;
     });
 
-    // モーダル外クリックで各種モーダルを閉じる
+    // モーダル・ドロワー外クリックで閉じる
     window.addEventListener('click', (e) => {
-        if (e.target === settingsModal) {
-            settingsModal.classList.add('hidden');
-        }
-        if (e.target === editVarModal) {
-            editVarModal.classList.add('hidden');
-        }
+        if (e.target === settingsModal) settingsModal.classList.add('hidden');
+        if (e.target === editVarModal) editVarModal.classList.add('hidden');
+        if (e.target === addLedgerModal) addLedgerModal.classList.add('hidden');
+        if (e.target === drawerMenu) drawerMenu.classList.add('hidden');
+    });
+
+    // --- ドロワーメニューの各種ボタン ---
+    menuToggleBtn.addEventListener('click', () => {
+        renderLedgerMenu();
+        drawerMenu.classList.remove('hidden');
+    });
+    closeDrawerBtn.addEventListener('click', () => {
+        drawerMenu.classList.add('hidden');
+    });
+    openAddLedgerBtn.addEventListener('click', () => {
+        drawerMenu.classList.add('hidden');
+        addLedgerModal.classList.remove('hidden');
+    });
+    closeLedgerModalBtn.addEventListener('click', () => {
+        addLedgerModal.classList.add('hidden');
     });
 
     // 変動費の新規登録機能(ざっくり入力)
