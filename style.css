@@ -338,3 +338,51 @@ textarea:focus {
 .delete-btn:hover {
     background: rgba(255, 75, 75, 0.3);
 }
+
+/* === サイドドロワーメニュー（ハンバーガーメニュー用） === */
+.drawer {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 2000;
+    display: flex;
+    justify-content: flex-end; /* 右から出す場合 */
+    transition: opacity 0.3s;
+}
+.drawer.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+.drawer-content {
+    width: 280px;
+    height: 100%;
+    background: var(--bg-color);
+    padding: 24px;
+    transform: translateX(0);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+}
+.drawer.hidden .drawer-content {
+    transform: translateX(100%);
+}
+.ledger-item {
+    padding: 14px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    background: var(--card-bg);
+    cursor: pointer;
+    transition: 0.2s;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.ledger-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+.ledger-item.active {
+    border-color: #00E676; /* アクティブな帳簿の目印 */
+    background: rgba(0, 230, 118, 0.1);
+}
