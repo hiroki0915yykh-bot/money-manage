@@ -99,9 +99,13 @@
     <div id="setup-container" style="display: none; padding: 40px 20px; text-align: center;">
         <h2>データベースの設定が必要です</h2>
         <p style="color:var(--text-secondary); margin-top:20px;">
-            マジックリンクからアプリを開き直してください。<br>
-            セキュリティのため、直接このURLを開いてもデータは同期されません。
+            セキュリティの設定が確認できません。<br>
+            ここに「マジックリンク」のURL全体を全選択してコピペしてください。
         </p>
+        <div style="margin-top: 30px;">
+            <input type="text" id="magic-link-input" placeholder="https://hiroki0915..." style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #333; background: #1a1a1a; color: #fff;">
+            <button id="set-magic-link-btn" class="primary-btn" style="margin-top: 15px;">👉 リンク設定を記憶する</button>
+        </div>
     </div>
 
     <!-- 固定費・サブスク設定モーダル -->

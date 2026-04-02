@@ -16,6 +16,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const paramUrl = urlParams.get('db_url');
     const paramKey = urlParams.get('db_key');
 
+    // 手動入力用のセットアップ機能（iOS等のホーム画面アプリ化対策用）
+    document.getElementById('set-magic-link-btn')?.addEventListener('click', () => {
+        const inputLink = document.getElementById('magic-link-input').value.trim();
+        try {
+            const parsedUrl = new URL(inputLink);
+            const manualParams = parsedUrl.searchParams;
+            const manualOutUrl = manualParams.get('db_url');
+            const manualOutKey = manualParams.get('db_key');
+            
+            if (manualOutUrl && manualOutKey) {
+                localStorage.setItem('supabase_url', manualOutUrl);
+                localStorage.setItem('supabase_key', manualOutKey);
+                window.location.reload();
+            } else {
+                alert('リンクの形式が違います。LINE等で送った長いURL全体を全選択してコピーできているか確認してください。');
+            }
+        } catch(e) {
+            alert('URLとして認識できませんでした。URLをそのまま貼り付けてください。');
+        }
+    });
+
     if (paramUrl && paramKey) {
         // キーをブラウザに隠して保存
         localStorage.setItem('supabase_url', paramUrl);
